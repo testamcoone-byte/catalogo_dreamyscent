@@ -12,16 +12,14 @@ ZIP_PATH = "thumbnails.zip"
 IMG_EXT = "jpg"
 IMG_WIDTH = 800
 
-# ==== DESCOMPRIMIR SI NO EXISTE LA CARPETA ====
+# ==== DESCOMPRIMIR ZIP SI NO EXISTE LA CARPETA ====
 if not Path(IMAGES_DIR).exists():
     if Path(ZIP_PATH).exists():
-        st.info("📦 Descomprimiendo imágenes, por favor espera...")
-        with zipfile.ZipFile(ZIP_PATH, "r") as zip_ref:
+        with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
             zip_ref.extractall(IMAGES_DIR)
-        st.success("✅ Imágenes listas")
+        st.success("✅ Imágenes descomprimidas correctamente")
     else:
-        st.error(f"No se encontró {IMAGES_DIR} ni {ZIP_PATH}. Sube uno de los dos.")
-        st.stop()
+        st.warning("⚠ No se encontró el archivo thumbnails.zip para descomprimir")
 
 # ==== FUNCIÓN PARA NORMALIZAR ====
 def normalizar_texto(texto):
@@ -94,5 +92,6 @@ if st.session_state.imagen_grande:
     st.image(st.session_state.imagen_grande, width=IMG_WIDTH)
     if st.button("Cerrar imagen"):
         st.session_state.imagen_grande = None
+
 
 
