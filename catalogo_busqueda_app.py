@@ -4,6 +4,8 @@ import unicodedata
 import re
 from pathlib import Path
 import zipfile
+import shutil
+import os
 
 # ==== CONFIGURACIÓN ====
 JSON_PATH = "catalogo_ocr.json"
@@ -16,7 +18,16 @@ IMG_WIDTH = 800
 if not Path(IMAGES_DIR).exists():
     if Path(ZIP_PATH).exists():
         with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
-            zip_ref.extractall(IMAGES_DIR)
+            zip_ref.extractall("temp_extract")  # Extraemos en carpeta temporal
+        # Buscar imágenes en cualquier subcarpeta
+        os.makedirs(IMAGES_DIR, exist_ok=True)
+        for root, dirs, files in os.walk("temp_extract"):
+            for file in files:
+                if file.endswith(f".{IMG_EXT}"):
+                    src = os.path.join(root, file)
+                    dst = os.path.join(IMAGES_DIR, file)
+                    shutil.move(src, dst)
+        shutil.rmtree("temp_extract")  # Eliminamos carpeta temporal
         st.success("✅ Imágenes descomprimidas correctamente")
     else:
         st.warning("⚠ No se encontró el archivo thumbnails.zip para descomprimir")
@@ -50,8 +61,7 @@ query_norm = normalizar_texto(query)
 
 resultados = []
 if query_norm:
-    for pagina, data in catalogo.items():
-        texto = data if isinstance(data, str) else data.get("texto", "")
+    for pagina, texto in catalogo.items():
         texto_norm = normalizar_texto(texto)
         if query_norm in texto_norm:
             resultados.append((int(pagina), texto))
