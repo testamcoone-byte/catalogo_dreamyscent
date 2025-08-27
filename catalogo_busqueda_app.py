@@ -4,33 +4,13 @@ import unicodedata
 import re
 from pathlib import Path
 import zipfile
-import shutil
-import os
 
 # ==== CONFIGURACIÓN ====
 JSON_PATH = "catalogo_ocr.json"
 IMAGES_DIR = "thumbnails"
-ZIP_PATH = "thumbnails.zip"
+ZIP_FILE = "thumbnails.zip"  # Subir este ZIP en la nube si no hay carpeta
 IMG_EXT = "jpg"
 IMG_WIDTH = 800
-
-# ==== DESCOMPRIMIR ZIP SI NO EXISTE LA CARPETA ====
-if not Path(IMAGES_DIR).exists():
-    if Path(ZIP_PATH).exists():
-        with zipfile.ZipFile(ZIP_PATH, 'r') as zip_ref:
-            zip_ref.extractall("temp_extract")  # Extraemos en carpeta temporal
-        # Buscar imágenes en cualquier subcarpeta
-        os.makedirs(IMAGES_DIR, exist_ok=True)
-        for root, dirs, files in os.walk("temp_extract"):
-            for file in files:
-                if file.endswith(f".{IMG_EXT}"):
-                    src = os.path.join(root, file)
-                    dst = os.path.join(IMAGES_DIR, file)
-                    shutil.move(src, dst)
-        shutil.rmtree("temp_extract")  # Eliminamos carpeta temporal
-        st.success("✅ Imágenes descomprimidas correctamente")
-    else:
-        st.warning("⚠ No se encontró el archivo thumbnails.zip para descomprimir")
 
 # ==== FUNCIÓN PARA NORMALIZAR ====
 def normalizar_texto(texto):
@@ -42,6 +22,16 @@ def normalizar_texto(texto):
         if unicodedata.category(c) != 'Mn'
     )
     return texto
+
+# ==== DESCOMPRIMIR SI ES NECESARIO ====
+if not Path(IMAGES_DIR).exists():
+    if Path(ZIP_FILE).exists():
+        st.info("Descomprimiendo imágenes...")
+        with zipfile.ZipFile(ZIP_FILE, "r") as zip_ref:
+            zip_ref.extractall(IMAGES_DIR)
+        st.success("Imágenes descomprimidas.")
+    else:
+        st.warning(f"No se encuentra la carpeta '{IMAGES_DIR}' ni el ZIP '{ZIP_FILE}'.")
 
 # ==== INTERFAZ ====
 st.title("📖 Catálogo DreamyScent")
@@ -61,7 +51,8 @@ query_norm = normalizar_texto(query)
 
 resultados = []
 if query_norm:
-    for pagina, texto in catalogo.items():
+    for pagina, data in catalogo.items():
+        texto = data if isinstance(data, str) else data.get("texto", "")
         texto_norm = normalizar_texto(texto)
         if query_norm in texto_norm:
             resultados.append((int(pagina), texto))
@@ -76,7 +67,13 @@ st.write(f"Resultados encontrados: {len(resultados)}")
 if resultados:
     for pagina, texto in sorted(resultados):
         img_path = f"{IMAGES_DIR}/page_{pagina}.{IMG_EXT}"
-        fragmento = texto[:500] + "..." if len(texto) > 500 else texto
+
+        # Fragmento seguro
+        if isinstance(texto, str):
+            fragmento = texto[:500] + "..." if len(texto) > 500 else texto
+        else:
+            fragmento = str(texto)
+
         if query:
             fragmento = re.sub(f"({query})", r"**\1**", fragmento, flags=re.IGNORECASE)
 
