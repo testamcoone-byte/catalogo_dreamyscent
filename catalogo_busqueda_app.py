@@ -10,9 +10,9 @@ JSON_PATH = "catalogo_ocr.json"
 IMAGES_DIR = "thumbnails"
 ZIP_FILE = "thumbnails.zip"  # Subir este ZIP en la nube si no hay carpeta
 IMG_EXT = "jpg"
-IMG_WIDTH = 800
+IMG_WIDTH = 1000  # Imagen completa más grande para mejor calidad
 
-# ==== FUNCIÓN PARA NORMALIZAR ====
+# ==== FUNCIONES ====
 def normalizar_texto(texto):
     if not isinstance(texto, str):
         return ""
@@ -21,6 +21,21 @@ def normalizar_texto(texto):
         c for c in unicodedata.normalize('NFD', texto)
         if unicodedata.category(c) != 'Mn'
     )
+    return texto
+
+def limpiar_texto(texto):
+    """Elimina caracteres raros y formatea campos clave"""
+    if not isinstance(texto, str):
+        return ""
+    # Quitar caracteres innecesarios
+    texto = re.sub(r'[\|\-\—]+', ' ', texto)
+    texto = re.sub(r'\(l', '', texto, flags=re.IGNORECASE)
+    # Unir líneas y quitar espacios duplicados
+    texto = texto.replace("\n", " ")
+    texto = re.sub(r'\s+', ' ', texto)
+    texto = texto.strip()
+    # Negrita para campos comunes
+    texto = re.sub(r'(Genero|Cantidad|Clima)', r'**\1**', texto, flags=re.IGNORECASE)
     return texto
 
 # ==== DESCOMPRIMIR SI ES NECESARIO ====
@@ -68,15 +83,13 @@ if resultados:
     for pagina, texto in sorted(resultados):
         img_path = f"{IMAGES_DIR}/page_{pagina}.{IMG_EXT}"
 
-        # Fragmento seguro
-        if isinstance(texto, str):
-            fragmento = texto[:500] + "..." if len(texto) > 500 else texto
-        else:
-            fragmento = str(texto)
-
+        # Limpiar y preparar fragmento
+        texto_limpio = limpiar_texto(texto)
+        fragmento = texto_limpio[:500] + "..." if len(texto_limpio) > 500 else texto_limpio
         if query:
             fragmento = re.sub(f"({query})", r"**\1**", fragmento, flags=re.IGNORECASE)
 
+        # Mostrar resultados
         st.markdown(f"### Página {pagina}")
         col1, col2 = st.columns([1, 2])
         with col1:
@@ -99,6 +112,3 @@ if st.session_state.imagen_grande:
     st.image(st.session_state.imagen_grande, width=IMG_WIDTH)
     if st.button("Cerrar imagen"):
         st.session_state.imagen_grande = None
-
-
-
