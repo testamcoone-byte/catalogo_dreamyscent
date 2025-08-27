@@ -4,26 +4,26 @@ import unicodedata
 import re
 from pathlib import Path
 import zipfile
-import os
 
 # ==== CONFIGURACIÓN ====
-JSON_PATH = "catalogo_ocr.json"   # OCR ya procesado
-THUMBNAILS_ZIP = "thumbnails.zip" # Carpeta comprimida con miniaturas
-IMAGES_ZIP = "imagenes.zip"       # Carpeta comprimida con imágenes grandes
-THUMBNAILS_DIR = "thumbnails"
-IMAGES_DIR = "imagenes"
+JSON_PATH = "catalogo_ocr.json"
+IMAGES_DIR = "thumbnails"
+ZIP_PATH = "thumbnails.zip"
 IMG_EXT = "jpg"
+IMG_WIDTH = 800
 
-# ==== DESCOMPRIMIR ZIP SI NO EXISTE LA CARPETA ====
-def descomprimir_zip(zip_path, destino):
-    if Path(zip_path).exists() and not Path(destino).exists():
-        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-            zip_ref.extractall(destino)
+# ==== DESCOMPRIMIR SI NO EXISTE LA CARPETA ====
+if not Path(IMAGES_DIR).exists():
+    if Path(ZIP_PATH).exists():
+        st.info("📦 Descomprimiendo imágenes, por favor espera...")
+        with zipfile.ZipFile(ZIP_PATH, "r") as zip_ref:
+            zip_ref.extractall(IMAGES_DIR)
+        st.success("✅ Imágenes listas")
+    else:
+        st.error(f"No se encontró {IMAGES_DIR} ni {ZIP_PATH}. Sube uno de los dos.")
+        st.stop()
 
-descomprimir_zip(THUMBNAILS_ZIP, THUMBNAILS_DIR)
-descomprimir_zip(IMAGES_ZIP, IMAGES_DIR)
-
-# ==== FUNCIÓN PARA NORMALIZAR TEXTO ====
+# ==== FUNCIÓN PARA NORMALIZAR ====
 def normalizar_texto(texto):
     if not isinstance(texto, str):
         return ""
@@ -35,9 +35,8 @@ def normalizar_texto(texto):
     return texto
 
 # ==== INTERFAZ ====
-st.set_page_config(page_title="Catálogo DreamyScent", layout="wide")
 st.title("📖 Catálogo DreamyScent")
-st.write("Busca productos por **nombre**, **descripción** o **palabra clave**.")
+st.write("Busca productos por nombre, descripción o palabra clave.")
 
 # ==== CARGAR JSON ====
 if not Path(JSON_PATH).exists():
@@ -47,48 +46,53 @@ if not Path(JSON_PATH).exists():
 with open(JSON_PATH, "r", encoding="utf-8") as f:
     catalogo = json.load(f)
 
-# ==== INPUT BUSQUEDA ====
+# ==== BUSQUEDA ====
 query = st.text_input("🔍 Escribe tu búsqueda:")
 query_norm = normalizar_texto(query)
 
 resultados = []
 if query_norm:
-    for pagina, texto in catalogo.items():
+    for pagina, data in catalogo.items():
+        texto = data if isinstance(data, str) else data.get("texto", "")
         texto_norm = normalizar_texto(texto)
         if query_norm in texto_norm:
             resultados.append((int(pagina), texto))
 
-# ==== RESULTADOS ====
+# ==== CONTROL DE IMAGEN ====
+if "imagen_grande" not in st.session_state:
+    st.session_state.imagen_grande = None
+
+# ==== MOSTRAR RESULTADOS ====
 st.write(f"Resultados encontrados: {len(resultados)}")
 
 if resultados:
-    # Columnas dinámicas (para móviles: 1 columna, escritorio: 3 columnas)
-    columnas = st.columns(1 if st.session_state.get('is_mobile', False) else 3)
-    for idx, (pagina, texto) in enumerate(sorted(resultados)):
-        img_path = f"{THUMBNAILS_DIR}/page_{pagina}.{IMG_EXT}"
-        full_img_path = f"{IMAGES_DIR}/page_{pagina}.{IMG_EXT}"
-
-        # Fragmento con resaltado
-        fragmento = texto[:300] + "..." if len(texto) > 300 else texto
+    for pagina, texto in sorted(resultados):
+        img_path = f"{IMAGES_DIR}/page_{pagina}.{IMG_EXT}"
+        fragmento = texto[:500] + "..." if len(texto) > 500 else texto
         if query:
             fragmento = re.sub(f"({query})", r"**\1**", fragmento, flags=re.IGNORECASE)
 
-        with columnas[idx % len(columnas)]:
-            st.markdown(f"### Página {pagina}")
+        st.markdown(f"### Página {pagina}")
+        col1, col2 = st.columns([1, 2])
+        with col1:
             if Path(img_path).exists():
-                if st.button(f"Ver página {pagina}", key=f"btn_{pagina}"):
-                    st.session_state['img_modal'] = full_img_path
-                st.image(img_path, width="stretch")
+                st.image(img_path, width=250)
+                if st.button("🔍 Ver imagen completa", key=f"btn_{pagina}"):
+                    st.session_state.imagen_grande = img_path
             else:
                 st.warning("Imagen no encontrada")
-            st.caption(fragmento)
-
-# ==== MODAL PARA IMAGEN COMPLETA ====
-if 'img_modal' in st.session_state:
-    st.write("---")
-    st.image(st.session_state['img_modal'], width=700)
-    if st.button("Cerrar imagen"):
-        del st.session_state['img_modal']
+        with col2:
+            st.write(fragmento)
 else:
+    if query:
+        st.warning("No se encontraron coincidencias.")
+
+# ==== MOSTRAR IMAGEN GRANDE ====
+if st.session_state.imagen_grande:
     st.write("---")
+    st.subheader("Imagen completa")
+    st.image(st.session_state.imagen_grande, width=IMG_WIDTH)
+    if st.button("Cerrar imagen"):
+        st.session_state.imagen_grande = None
+
 
